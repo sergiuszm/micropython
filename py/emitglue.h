@@ -1,5 +1,5 @@
 /*
- * This file is part of the Micro Python project, http://micropython.org/
+ * This file is part of the MicroPython project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
@@ -23,12 +23,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef __MICROPY_INCLUDED_PY_EMITGLUE_H__
-#define __MICROPY_INCLUDED_PY_EMITGLUE_H__
+#ifndef MICROPY_INCLUDED_PY_EMITGLUE_H
+#define MICROPY_INCLUDED_PY_EMITGLUE_H
 
 #include "py/obj.h"
 
 // These variables and functions glue the code emitters to the runtime.
+
+// These must fit in 8 bits; see scope.h
+enum {
+    MP_EMIT_OPT_NONE,
+    MP_EMIT_OPT_BYTECODE,
+    MP_EMIT_OPT_NATIVE_PYTHON,
+    MP_EMIT_OPT_VIPER,
+    MP_EMIT_OPT_ASM,
+};
 
 typedef enum {
     MP_CODE_UNUSED,
@@ -40,7 +49,7 @@ typedef enum {
 } mp_raw_code_kind_t;
 
 typedef struct _mp_raw_code_t {
-    mp_raw_code_kind_t kind : 3;
+    mp_uint_t kind : 3; // of type mp_raw_code_kind_t
     mp_uint_t scope_flags : 7;
     mp_uint_t n_pos_args : 11;
     union {
@@ -63,7 +72,10 @@ typedef struct _mp_raw_code_t {
 
 mp_raw_code_t *mp_emit_glue_new_raw_code(void);
 
-void mp_emit_glue_assign_bytecode(mp_raw_code_t *rc, const byte *code, mp_uint_t len,
+void mp_emit_glue_assign_bytecode(mp_raw_code_t *rc, const byte *code,
+    #if MICROPY_PERSISTENT_CODE_SAVE || MICROPY_DEBUG_PRINTERS
+    size_t len,
+    #endif
     const mp_uint_t *const_table,
     #if MICROPY_PERSISTENT_CODE_SAVE
     uint16_t n_obj, uint16_t n_raw_code,
@@ -74,4 +86,4 @@ void mp_emit_glue_assign_native(mp_raw_code_t *rc, mp_raw_code_kind_t kind, void
 mp_obj_t mp_make_function_from_raw_code(const mp_raw_code_t *rc, mp_obj_t def_args, mp_obj_t def_kw_args);
 mp_obj_t mp_make_closure_from_raw_code(const mp_raw_code_t *rc, mp_uint_t n_closed_over, const mp_obj_t *args);
 
-#endif // __MICROPY_INCLUDED_PY_EMITGLUE_H__
+#endif // MICROPY_INCLUDED_PY_EMITGLUE_H

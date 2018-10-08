@@ -1,5 +1,5 @@
 /*
- * This file is part of the Micro Python project, http://micropython.org/
+ * This file is part of the MicroPython project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
@@ -36,10 +36,19 @@
 #if MICROPY_EMIT_INLINE_THUMB
 
 typedef enum {
+// define rules with a compile function
 #define DEF_RULE(rule, comp, kind, ...) PN_##rule,
+#define DEF_RULE_NC(rule, kind, ...)
 #include "py/grammar.h"
 #undef DEF_RULE
-    PN_maximum_number_of,
+#undef DEF_RULE_NC
+    PN_const_object, // special node for a constant, generic Python object
+// define rules without a compile function
+#define DEF_RULE(rule, comp, kind, ...)
+#define DEF_RULE_NC(rule, kind, ...) PN_##rule,
+#include "py/grammar.h"
+#undef DEF_RULE
+#undef DEF_RULE_NC
 } pn_kind_t;
 
 struct _emit_inline_asm_t {
@@ -292,7 +301,7 @@ STATIC uint32_t get_arg_i(emit_inline_asm_t *emit, const char *op, mp_parse_node
     }
     uint32_t i = mp_obj_get_int_truncated(o);
     if ((i & (~fit_mask)) != 0) {
-        emit_inline_thumb_error_exc(emit, mp_obj_new_exception_msg_varg(&mp_type_SyntaxError, "'%s' integer 0x%x does not fit in mask 0x%x", op, i, fit_mask));
+        emit_inline_thumb_error_exc(emit, mp_obj_new_exception_msg_varg(&mp_type_SyntaxError, "'%s' integer 0x%x doesn't fit in mask 0x%x", op, i, fit_mask));
         return 0;
     }
     return i;

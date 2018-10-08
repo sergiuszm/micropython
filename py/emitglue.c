@@ -1,5 +1,5 @@
 /*
- * This file is part of the Micro Python project, http://micropython.org/
+ * This file is part of the MicroPython project, http://micropython.org/
  *
  * The MIT License (MIT)
  *
@@ -35,7 +35,7 @@
 #include "py/runtime0.h"
 #include "py/bc.h"
 
-#if 0 // print debugging info
+#if MICROPY_DEBUG_VERBOSE // print debugging info
 #define DEBUG_PRINT (1)
 #define WRITE_CODE (1)
 #define DEBUG_printf DEBUG_printf
@@ -55,7 +55,10 @@ mp_raw_code_t *mp_emit_glue_new_raw_code(void) {
     return rc;
 }
 
-void mp_emit_glue_assign_bytecode(mp_raw_code_t *rc, const byte *code, mp_uint_t len,
+void mp_emit_glue_assign_bytecode(mp_raw_code_t *rc, const byte *code,
+    #if MICROPY_PERSISTENT_CODE_SAVE || MICROPY_DEBUG_PRINTERS
+    size_t len,
+    #endif
     const mp_uint_t *const_table,
     #if MICROPY_PERSISTENT_CODE_SAVE
     uint16_t n_obj, uint16_t n_raw_code,
@@ -73,6 +76,9 @@ void mp_emit_glue_assign_bytecode(mp_raw_code_t *rc, const byte *code, mp_uint_t
     #endif
 
 #ifdef DEBUG_PRINT
+    #if !MICROPY_DEBUG_PRINTERS
+    const size_t len = 0;
+    #endif
     DEBUG_printf("assign byte code: code=%p len=" UINT_FMT " flags=%x\n", code, len, (uint)scope_flags);
 #endif
 #if MICROPY_DEBUG_PRINTERS
@@ -126,16 +132,14 @@ mp_obj_t mp_make_function_from_raw_code(const mp_raw_code_t *rc, mp_obj_t def_ar
     // make the function, depending on the raw code kind
     mp_obj_t fun;
     switch (rc->kind) {
-        case MP_CODE_BYTECODE:
-        no_other_choice:
-            fun = mp_obj_new_fun_bc(def_args, def_kw_args, rc->data.u_byte.bytecode, rc->data.u_byte.const_table);
-            break;
         #if MICROPY_EMIT_NATIVE
         case MP_CODE_NATIVE_PY:
-            fun = mp_obj_new_fun_native(def_args, def_kw_args, rc->data.u_native.fun_data, rc->data.u_native.const_table);
-            break;
         case MP_CODE_NATIVE_VIPER:
-            fun = mp_obj_new_fun_viper(rc->n_pos_args, rc->data.u_native.fun_data, rc->data.u_native.type_sig);
+            fun = mp_obj_new_fun_native(def_args, def_kw_args, rc->data.u_native.fun_data, rc->data.u_native.const_table);
+            // Check for a generator function, and if so change the type of the object
+            if ((rc->scope_flags & MP_SCOPE_FLAG_GENERATOR) != 0) {
+                ((mp_obj_base_t*)MP_OBJ_TO_PTR(fun))->type = &mp_type_native_gen_wrap;
+            }
             break;
         #endif
         #if MICROPY_EMIT_INLINE_ASM
@@ -144,14 +148,14 @@ mp_obj_t mp_make_function_from_raw_code(const mp_raw_code_t *rc, mp_obj_t def_ar
             break;
         #endif
         default:
-            // raw code was never set (this should not happen)
-            assert(0);
-            goto no_other_choice; // to help flow control analysis
-    }
-
-    // check for generator functions and if so wrap in generator object
-    if ((rc->scope_flags & MP_SCOPE_FLAG_GENERATOR) != 0) {
-        fun = mp_obj_new_gen_wrap(fun);
+            // rc->kind should always be set and BYTECODE is the only remaining case
+            assert(rc->kind == MP_CODE_BYTECODE);
+            fun = mp_obj_new_fun_bc(def_args, def_kw_args, rc->data.u_byte.bytecode, rc->data.u_byte.const_table);
+            // check for generator functions and if so change the type of the object
+            if ((rc->scope_flags & MP_SCOPE_FLAG_GENERATOR) != 0) {
+                ((mp_obj_base_t*)MP_OBJ_TO_PTR(fun))->type = &mp_type_gen_wrap;
+            }
+            break;
     }
 
     return fun;
